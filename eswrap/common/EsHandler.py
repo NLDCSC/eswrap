@@ -1,22 +1,88 @@
+from typing import Optional
+
+from elasticsearch import Elasticsearch
+
+
+class EsHandler(object):
+    """
+    The EsHandler
+    """
+
+    def __init__(self, es_connection: Elasticsearch, index: str):
+        self.es_connection = es_connection
+        self.index = index
+
+    def find(self, filter: dict = None):
+        """
+        Query the api.
+
+        :return: Reference to the EsCursor
+        :rtype: EsCursor
+        """
+
+        return EsCursor(self, filter)
+
+    def find_one(self, filter: dict = None):
+        """
+        Query the api.
+
+        :return: Data or None
+        :rtype: object
+        """
+
+        cursor = self.find(filter)
+
+        for result in cursor.limit(10000):
+            return result
+        return None
+
+    def count(self, filter: dict = None):
+        """
+
+        :return:
+        :rtype:
+        """
+        if filter is None:
+            data = {"query": {"match_all": {}}}
+        else:
+            data = {"query": {"match": filter}}
+
+        return self.es_connection.count(index=self.index, body=data)["count"]
+
+    def upsert(self, document: dict, doc_id: Optional[str] = None):
+        """
+
+        :return:
+        :rtype:
+        """
+        if doc_id is None:
+            return self.es_connection.index(index=self.index, document=document)
+        else:
+            return self.es_connection.index(index=self.index, id=doc_id, document=document)
+
+    def __repr__(self):
+        """return a string representation of the obj EsHandler"""
+        return "<< EsHandler: {} >>".format(self.es_connection.remote.transport.hosts)
+
+
 class EsCursor(object):
     """
     The EsCursor
     """
 
-    def __init__(self, es_handler, filter=None, limit=None, skip=None, sort=None):
+    def __init__(
+        self,
+        es_handler: EsHandler,
+        filter: dict = None,
+        limit: int = 10000,
+        skip: int = None,
+        sort: tuple = None,
+    ):
         """
         Create a new CveSearchApi object.
 
         :param es_handler: EsHandler object
         :type es_handler: EsHandler
-        :param filter: Filter to be used when querying data
-        :type filter: dict
-        :param limit: Limit value
-        :type limit: int
-        :param skip: Skip value
-        :type skip: int
-        :param sort: Sort value
-        :type sort: tuple
         """
 
         self.EsHandler = es_handler
@@ -45,10 +111,12 @@ class EsCursor(object):
 
     def query(self):
         """
-        Endpoint for free query to cve search data
+        Endpoint for free query
         """
 
-        results = self.EsHandler.es_connection.search(index=self.EsHandler.index, body=self.__data)
+        results = self.EsHandler.es_connection.search(
+            index=self.EsHandler.index, body=self.__data
+        )
 
         if isinstance(results, str):
             self.data_queue = None
@@ -60,7 +128,7 @@ class EsCursor(object):
         except Exception:
             self.data_queue = results
 
-    def limit(self, value):
+    def limit(self, value: int):
         """
         Method to limit the amount of returned data
 
@@ -79,7 +147,7 @@ class EsCursor(object):
 
         return self
 
-    def skip(self, value):
+    def skip(self, value: int):
         """
         Method to skip the given amount of records before returning the data
 
@@ -98,7 +166,7 @@ class EsCursor(object):
 
         return self
 
-    def sort(self, values):
+    def sort(self, values: list):
         """
         A comma-separated list of <field>:<direction> pairs
 
@@ -107,6 +175,8 @@ class EsCursor(object):
         :return: EsCursor object
         :rtype: EsCursor
         """
+        self.__sort = values
+
         self.__data["sort"] = values
 
         return self
