@@ -14,44 +14,47 @@ class EsHandler(object):
 
     def search(self, filter: dict = None, skip: int = 0, limit: int = 10):
         """
-        Query the api.
+        Search the index.
         """
-
         return EsCursor(self, filter, limit=limit, skip=skip).search()
 
     def find(self, filter: dict = None):
         """
-        Query the api.
+        Query the index.
         """
-
         return EsCursor(self, filter)
 
     def find_one(self, filter: dict = None):
         """
-        Query the api and return the first result.
+        Query the index and return the first result.
         """
-
         for result in self.find(filter).limit(1):
             return result
         return None
 
-    def count(self, filter: dict = None):
+    def count(self, filter: dict = None, **kwargs):
         """ """
         if filter is None:
             data = {"query": {"match_all": {}}}
         else:
             data = {"query": {"match": filter}}
 
-        return self.es_connection.count(index=self.index, body=data)["count"]
+        return self.es_connection.count(index=self.index, body=data, **kwargs)["count"]
 
-    def upsert(self, document: dict, doc_id: Optional[str] = None):
+    def upsert(self, document: dict, doc_id: Optional[str] = None, **kwargs):
         """ """
         if doc_id is None:
-            return self.es_connection.index(index=self.index, document=document)
+            return self.es_connection.index(index=self.index, document=document, **kwargs)
         else:
             return self.es_connection.index(
-                index=self.index, id=doc_id, document=document
+                index=self.index, id=doc_id, document=document, **kwargs
             )
+
+    def delete(self, doc_id: str, **kwargs):
+        return self.es_connection.delete(index=self.index, id=doc_id, **kwargs)
+
+    def delete_by_query(self, filter: dict, **kwargs):
+        return self.es_connection.delete_by_query(index=self.index, body=filter, **kwargs)
 
     def __repr__(self):
         """return a string representation of the obj EsHandler"""
