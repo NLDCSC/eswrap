@@ -1,8 +1,13 @@
 import os
+from typing import Optional
 
+import urllib3
 from elasticsearch import Elasticsearch
+from urllib3.exceptions import InsecureRequestWarning
 
 from eswrap.common.EsHandler import EsHandler
+
+urllib3.disable_warnings(InsecureRequestWarning)
 
 try:
     from version import VERSION
@@ -25,7 +30,9 @@ class EsWrap(object):
 
         for each in self.__es_client.indices.get(index="*").keys():
             if not each.startswith("."):
-                setattr(self, each, EsHandler(es_connection=self.__es_client, index=each))
+                setattr(
+                    self, each, EsHandler(es_connection=self.__es_client, index=each)
+                )
 
     @property
     def es_client(self):
@@ -33,12 +40,30 @@ class EsWrap(object):
 
     @property
     def version(self):
-        """ Property returning current version """
+        """Property returning current version"""
         return self.__version
+
+    @property
+    def indices(self):
+        return list(self.es_client.indices.get(index="*").keys())
+
+    @property
+    def info(self):
+        return self.es_client.info()
+
+    def index(self, index_name: str, data: dict, doc_id: Optional[str] = None):
+        if not hasattr(self, index_name):
+            setattr(
+                self,
+                index_name,
+                EsHandler(es_connection=self.__es_client, index=index_name),
+            )
+
+        return self.es_client.index(index=index_name, document=data, id=doc_id)
 
     def __del__(self):
         self.__es_client.close()
 
     def __repr__(self):
-        """ String representation of object """
+        """String representation of object"""
         return "<< EsWrap:{} >>".format(self.version)
