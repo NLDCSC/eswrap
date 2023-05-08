@@ -12,36 +12,31 @@ class EsHandler(object):
         self.es_connection = es_connection
         self.index = index
 
+    def search(self, filter: dict = None, skip: int = 0, limit: int = 10):
+        """
+        Query the api.
+        """
+
+        return EsCursor(self, filter, limit=limit, skip=skip).search()
+
     def find(self, filter: dict = None):
         """
         Query the api.
-
-        :return: Reference to the EsCursor
-        :rtype: EsCursor
         """
 
         return EsCursor(self, filter)
 
     def find_one(self, filter: dict = None):
         """
-        Query the api.
-
-        :return: Data or None
-        :rtype: object
+        Query the api and return the first result.
         """
 
-        cursor = self.find(filter)
-
-        for result in cursor.limit(10000):
+        for result in self.find(filter).limit(1):
             return result
         return None
 
     def count(self, filter: dict = None):
-        """
-
-        :return:
-        :rtype:
-        """
+        """ """
         if filter is None:
             data = {"query": {"match_all": {}}}
         else:
@@ -50,19 +45,17 @@ class EsHandler(object):
         return self.es_connection.count(index=self.index, body=data)["count"]
 
     def upsert(self, document: dict, doc_id: Optional[str] = None):
-        """
-
-        :return:
-        :rtype:
-        """
+        """ """
         if doc_id is None:
             return self.es_connection.index(index=self.index, document=document)
         else:
-            return self.es_connection.index(index=self.index, id=doc_id, document=document)
+            return self.es_connection.index(
+                index=self.index, id=doc_id, document=document
+            )
 
     def __repr__(self):
         """return a string representation of the obj EsHandler"""
-        return "<< EsHandler: {} >>".format(self.es_connection.remote.transport.hosts)
+        return "<< EsHandler: {} >>".format(self.index)
 
 
 class EsCursor(object):
@@ -74,7 +67,7 @@ class EsCursor(object):
         self,
         es_handler: EsHandler,
         filter: dict = None,
-        limit: int = 10000,
+        limit: int = 10,
         skip: int = None,
         sort: tuple = None,
     ):
@@ -109,14 +102,48 @@ class EsCursor(object):
         """return a string representation of the obj GenericApi"""
         return "<<EsCursor: {}>>".format(self.EsHandler.index)
 
+    def __fetch_results(self):
+        return self.EsHandler.es_connection.search(
+            index=self.EsHandler.index, body=self.__data
+        )
+
+    def search(self):
+
+        ret_dict = {"skip": self.__skip, "limit": self.__limit}
+
+        self.__data["size"] = self.__limit
+        self.__data["from"] = self.__skip
+
+        results = self.__fetch_results()
+
+        if isinstance(results, str):
+            ret_dict["data"] = []
+            ret_dict["total"] = 0
+            return ret_dict
+
+        try:
+            if len(results["hits"]["hits"]) > 0:
+                count = results["hits"]["total"]["value"]
+                results = [x["_source"] for x in results["hits"]["hits"]]
+            else:
+                count = 0
+                results = []
+
+            ret_dict["data"] = results
+            ret_dict["total"] = count
+
+        except Exception:
+            ret_dict["data"] = results
+            ret_dict["total"] = len(results)
+
+        return ret_dict
+
     def query(self):
         """
         Endpoint for free query
         """
 
-        results = self.EsHandler.es_connection.search(
-            index=self.EsHandler.index, body=self.__data
-        )
+        results = self.__fetch_results()
 
         if isinstance(results, str):
             self.data_queue = None
@@ -130,7 +157,7 @@ class EsCursor(object):
 
     def limit(self, value: int):
         """
-        Method to limit the amount of returned data
+        Method to limit the amount of returned data; default is set to 10
 
         :param value: Limit
         :type value: int
@@ -182,12 +209,12 @@ class EsCursor(object):
         return self
 
     def __iter__(self):
-        """ Make this class an iterator """
+        """Make this class an iterator"""
         self.query()
         return self
 
     def next(self):
-        """ Iterate to the results and return database objects """
+        """Iterate to the results and return database objects"""
         if self.__empty:
             raise StopIteration
         if self.data_queue is None:

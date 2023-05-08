@@ -5,8 +5,8 @@ import requests
 
 from eswrap import EsWrap
 
-es = EsWrap(scheme="https", verify_certs=False, http_auth=("elastic", "Knocks.01"))
-i = 18
+es = EsWrap(scheme="https", verify_certs=False, http_auth=("elastic", "elastic"))
+i = 1
 while i < 30:
     r = requests.get("https://swapi.dev/api/people/" + str(i))
 
