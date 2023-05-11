@@ -1,6 +1,8 @@
+import logging
 import os
 from typing import Optional
 
+import elastic_transport
 import urllib3
 from elasticsearch import Elasticsearch
 from urllib3.exceptions import InsecureRequestWarning
@@ -26,13 +28,20 @@ class EsWrap(object):
 
         self.connection_details = {"host": host, "port": port, "scheme": scheme}
 
+        self.logger = logging.getLogger(__name__)
+
         self.__es_client = Elasticsearch([self.connection_details], **kwargs)
 
-        for each in self.__es_client.indices.get(index="*").keys():
-            if not each.startswith("."):
-                setattr(
-                    self, each, EsHandler(es_connection=self.__es_client, index=each)
-                )
+        try:
+            for each in self.__es_client.indices.get(index="*").keys():
+                if not each.startswith("."):
+                    setattr(
+                        self, each, EsHandler(es_connection=self.__es_client, index=each)
+                    )
+        except elastic_transport.ConnectionError as err:
+            self.logger.warning(f"Cannot connect to elasticsearch, error encountered: {err}")
+        except Exception as err:
+            self.logger.error(f"Uncaught exeption encountered: {err}")
 
     @property
     def es_client(self):
