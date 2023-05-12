@@ -18,11 +18,11 @@ class EsHandler(object):
         """
         return EsCursor(self, filter, limit=limit, skip=skip).search()
 
-    def find(self, filter: dict = None):
+    def find(self, filter: dict = None,  **kwargs):
         """
         Query the index.
         """
-        return EsCursor(self, filter)
+        return EsCursor(self, filter, **kwargs)
 
     def find_one(self, filter: dict = None):
         """
@@ -37,14 +37,22 @@ class EsHandler(object):
         if filter is None:
             data = {"query": {"match_all": {}}}
         else:
-            data = {"query": {"match": filter}}
+            if "regexp" in kwargs:
+                if kwargs["regexp"]:
+                    data = {"query": {"regexp": filter}}
+                else:
+                    data = {"query": {"match": filter}}
+            else:
+                data = {"query": {"match": filter}}
 
         return self.es_connection.count(index=self.index, body=data, **kwargs)["count"]
 
     def upsert(self, document: dict, doc_id: Optional[str] = None, **kwargs):
         """ """
         if doc_id is None:
-            return self.es_connection.index(index=self.index, document=document, **kwargs)
+            return self.es_connection.index(
+                index=self.index, document=document, **kwargs
+            )
         else:
             return self.es_connection.index(
                 index=self.index, id=doc_id, document=document, **kwargs
@@ -54,7 +62,9 @@ class EsHandler(object):
         return self.es_connection.delete(index=self.index, id=doc_id, **kwargs)
 
     def delete_by_query(self, filter: dict, **kwargs):
-        return self.es_connection.delete_by_query(index=self.index, body=filter, **kwargs)
+        return self.es_connection.delete_by_query(
+            index=self.index, body=filter, **kwargs
+        )
 
     def __repr__(self):
         """return a string representation of the obj EsHandler"""
@@ -73,6 +83,7 @@ class EsCursor(object):
         limit: int = 10,
         skip: int = None,
         sort: tuple = None,
+            **kwargs
     ):
         """
         Create a new CveSearchApi object.
@@ -85,11 +96,20 @@ class EsCursor(object):
 
         self.__data = {}
 
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
         data = filter
         if data is None:
             data = {"query": {"match_all": {}}}
         else:
-            data = {"query": {"match": filter}}
+            if hasattr(self, "regexp"):
+                if self.regexp:
+                    data = {"query": {"regexp": filter}}
+                else:
+                    data = {"query": {"match": filter}}
+            else:
+                data = {"query": {"match": filter}}
 
         self.__data = data
 
@@ -161,7 +181,6 @@ class EsCursor(object):
                     ret_list.append(val_dict)
 
                 self.data_queue = ret_list
-                # self.data_queue = [x["_source"] for x in results["hits"]["hits"]]
         except Exception:
             self.data_queue = results
 
