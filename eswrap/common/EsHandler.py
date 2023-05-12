@@ -154,7 +154,14 @@ class EsCursor(object):
 
         try:
             if len(results["hits"]["hits"]) > 0:
-                self.data_queue = [x["_source"] for x in results["hits"]["hits"]]
+                ret_list = []
+                for x in results["hits"]["hits"]:
+                    val_dict = x["_source"]
+                    val_dict.update({"_id": x["_id"]})
+                    ret_list.append(val_dict)
+
+                self.data_queue = ret_list
+                # self.data_queue = [x["_source"] for x in results["hits"]["hits"]]
         except Exception:
             self.data_queue = results
 
