@@ -40,6 +40,8 @@ class EsHandler(object):
             if "regexp" in kwargs:
                 if kwargs["regexp"]:
                     data = {"query": {"regexp": filter}}
+                    # popping this value; elasticsearch does not recognize this value
+                    kwargs.pop("regexp")
                 else:
                     data = {"query": {"match": filter}}
             else:
@@ -83,7 +85,7 @@ class EsCursor(object):
         limit: int = 10,
         skip: int = None,
         sort: tuple = None,
-            **kwargs
+        **kwargs
     ):
         """
         Create a new CveSearchApi object.
