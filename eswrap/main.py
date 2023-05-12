@@ -22,24 +22,56 @@ except ModuleNotFoundError:
 
 class EsWrap(object):
     def __init__(
-        self, host: str = "localhost", port: int = 9200, scheme: str = "http", **kwargs
+        self,
+        host: str = "localhost",
+        port: int = 9200,
+        scheme: str = "http",
+        connection_details: list[str] | list[dict] = None,
+        **kwargs,
     ):
+        """
+        connection_details should facilitate all connection options as stated in the API documentation of the
+        Elasticsearch library.
+        E.g.
+        [
+            {'host': 'localhost'},
+            {'host': 'othernode', 'port': 443, 'url_prefix': 'es', 'use_ssl': True},
+        ]
+
+        or
+
+        ['localhost:443', 'other_host:443'] with additional kwargs (if any)
+
+        or
+
+        [
+            'http://user:secret@localhost:9200/',
+            'https://user:secret@other_host:443/production'
+        ]
+        """
         self.__version = VERSION
 
-        self.connection_details = {"host": host, "port": port, "scheme": scheme}
+        if connection_details is not None:
+            self.connection_details = [{"host": host, "port": port, "scheme": scheme}]
+        else:
+            self.connection_details = connection_details
 
         self.logger = logging.getLogger(__name__)
 
-        self.__es_client = Elasticsearch([self.connection_details], **kwargs)
+        self.__es_client = Elasticsearch(self.connection_details, **kwargs)
 
         try:
             for each in self.__es_client.indices.get(index="*").keys():
                 if not each.startswith("."):
                     setattr(
-                        self, each, EsHandler(es_connection=self.__es_client, index=each)
+                        self,
+                        each,
+                        EsHandler(es_connection=self.__es_client, index=each),
                     )
         except elastic_transport.ConnectionError as err:
-            self.logger.warning(f"Cannot connect to elasticsearch, error encountered: {err}")
+            self.logger.warning(
+                f"Cannot connect to elasticsearch, error encountered: {err}"
+            )
         except Exception as err:
             self.logger.error(f"Uncaught exeption encountered: {err}")
 
@@ -69,6 +101,27 @@ class EsWrap(object):
             )
 
         return self.es_client.index(index=index_name, document=data, id=doc_id)
+
+    def delete_index(self, index_name: str):
+
+        ret_val = self.es_client.options(ignore_status=[400, 404]).indices.delete(
+            index=index_name
+        )
+
+        try:
+            if ret_val["acknowledged"]:
+                if hasattr(self, index_name):
+                    delattr(self, index_name)
+                return True
+        except KeyError:
+            # failed somehow, assuming the given index does not exist
+            self.logger.warning(
+                f"The index {index_name} cannot not be deleted; reason -> {ret_val}"
+            )
+        except Exception as err:
+            self.logger.error(f"Uncaught exception encountered: {err}")
+
+        return False
 
     def __del__(self):
         self.__es_client.close()
