@@ -39,7 +39,12 @@ class EsHandler(object):
         else:
             if "regexp" in kwargs:
                 if kwargs["regexp"]:
-                    data = {"query": {"regexp": filter}}
+                    if "bool_query" in kwargs and kwargs["bool_query"]:
+                        data = {"query": {"bool": filter}}
+                        # popping this value; elasticsearch does not recognize this value
+                        kwargs.pop("bool_query")
+                    else:
+                        data = {"query": {"regexp": filter}}
                     # popping this value; elasticsearch does not recognize this value
                     kwargs.pop("regexp")
                 else:
@@ -107,7 +112,10 @@ class EsCursor(object):
         else:
             if hasattr(self, "regexp"):
                 if self.regexp:
-                    data = {"query": {"regexp": filter}}
+                    if hasattr(self, "bool_query") and self.bool_query:
+                        data = {"query": {"bool": filter}}
+                    else:
+                        data = {"query": {"regexp": filter}}
                 else:
                     data = {"query": {"match": filter}}
             else:
