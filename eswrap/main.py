@@ -123,6 +123,31 @@ class EsWrap(object):
 
         return False
 
+    def create_index(self, index_name: str):
+
+        ret_val = self.es_client.options(ignore_status=[400, 404]).indices.create(
+            index=index_name
+        )
+
+        try:
+            if ret_val["acknowledged"]:
+                if not hasattr(self, index_name):
+                    setattr(
+                        self,
+                        index_name,
+                        EsHandler(es_connection=self.__es_client, index=index_name),
+                    )
+                return True
+        except KeyError:
+            # failed somehow, assuming the given index does not exist
+            self.logger.warning(
+                f"The index {index_name} cannot not be created; reason -> {ret_val}"
+            )
+        except Exception as err:
+            self.logger.error(f"Uncaught exception encountered: {err}")
+
+        return False
+
     def __del__(self):
         self.__es_client.close()
 
