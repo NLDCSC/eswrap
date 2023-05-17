@@ -68,12 +68,19 @@ class EsWrap(object):
                         each,
                         EsHandler(es_connection=self.__es_client, index=each),
                     )
+                else:
+                    # workaround for handling system indexes; needs further troubleshooting
+                    setattr(
+                        self,
+                        each[1:].split("-")[0],
+                        EsHandler(es_connection=self.__es_client, index=each),
+                    )
         except elastic_transport.ConnectionError as err:
             self.logger.warning(
                 f"Cannot connect to elasticsearch, error encountered: {err}"
             )
         except Exception as err:
-            self.logger.error(f"Uncaught exeption encountered: {err}")
+            self.logger.error(f"Uncaught exception encountered: {err}")
 
     @property
     def es_client(self):
