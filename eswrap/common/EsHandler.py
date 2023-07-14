@@ -18,7 +18,7 @@ class EsHandler(object):
         """
         return EsCursor(self, filter, limit=limit, skip=skip).search()
 
-    def find(self, filter: dict = None,  **kwargs):
+    def find(self, filter: dict = None, **kwargs):
         """
         Query the index.
         """
@@ -56,31 +56,21 @@ class EsHandler(object):
 
     def query_on_field(self, field_name: str, missing: bool = True, **kwargs):
 
-        if missing:
+        kwargs = kwargs
+        kwargs["query_on_field"] = True
 
-            data = {
-                "query": {
-                    "bool": {
-                        "must_not": {
-                            "exists": {
-                                "field": f"{field_name}"
-                            }
-                        }
-                    }
-                }
-            }
+        if missing:
+            kwargs["bool_query"] = True
+
+            data = {"must_not": {"exists": {"field": f"{field_name}"}}}
 
         else:
 
-            data = {
-                "query": {
-                    "exists": {
-                        "field": f"{field_name}"
-                    }
-                }
-            }
+            kwargs["exists_query"] = True
 
-        return self.es_connection.search(index=self.index, body=data, **kwargs)
+            data = {"field": f"{field_name}"}
+
+        return EsCursor(self, data, **kwargs)
 
     def upsert(self, document: dict, doc_id: Optional[str] = None, **kwargs):
         """ """
@@ -112,13 +102,13 @@ class EsCursor(object):
     """
 
     def __init__(
-            self,
-            es_handler: EsHandler,
-            filter: dict = None,
-            limit: int = 10,
-            skip: int = None,
-            sort: tuple = None,
-            **kwargs
+        self,
+        es_handler: EsHandler,
+        filter: dict = None,
+        limit: int = 10,
+        skip: int = None,
+        sort: tuple = None,
+        **kwargs,
     ):
         """
         Create a new CveSearchApi object.
@@ -146,6 +136,11 @@ class EsCursor(object):
                         data = {"query": {"regexp": filter}}
                 else:
                     data = {"query": {"match": filter}}
+            elif hasattr(self, "query_on_field"):
+                if hasattr(self, "bool_query") and self.bool_query:
+                    data = {"query": {"bool": filter}}
+                if hasattr(self, "exists_query") and self.exists_query:
+                    data = {"query": {"exists": filter}}
             else:
                 data = {"query": {"match": filter}}
 
