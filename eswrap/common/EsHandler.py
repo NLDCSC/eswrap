@@ -54,6 +54,34 @@ class EsHandler(object):
 
         return self.es_connection.count(index=self.index, body=data, **kwargs)["count"]
 
+    def query_on_field(self, field_name: str, missing: bool = True, **kwargs):
+
+        if missing:
+
+            data = {
+                "query": {
+                    "bool": {
+                        "must_not": {
+                            "exists": {
+                                "field": f"{field_name}"
+                            }
+                        }
+                    }
+                }
+            }
+
+        else:
+
+            data = {
+                "query": {
+                    "exists": {
+                        "field": f"{field_name}"
+                    }
+                }
+            }
+
+        return self.es_connection.search(index=self.index, body=data, **kwargs)
+
     def upsert(self, document: dict, doc_id: Optional[str] = None, **kwargs):
         """ """
         if doc_id is None:
@@ -84,13 +112,13 @@ class EsCursor(object):
     """
 
     def __init__(
-        self,
-        es_handler: EsHandler,
-        filter: dict = None,
-        limit: int = 10,
-        skip: int = None,
-        sort: tuple = None,
-        **kwargs
+            self,
+            es_handler: EsHandler,
+            filter: dict = None,
+            limit: int = 10,
+            skip: int = None,
+            sort: tuple = None,
+            **kwargs
     ):
         """
         Create a new CveSearchApi object.
