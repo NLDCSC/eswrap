@@ -51,7 +51,7 @@ class EsWrap(object):
         """
         self.__version = VERSION
 
-        if connection_details is not None:
+        if connection_details is None:
             self.connection_details = [{"host": host, "port": port, "scheme": scheme}]
         else:
             self.connection_details = connection_details
