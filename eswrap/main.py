@@ -1,13 +1,14 @@
 import logging
 import os
-from typing import Optional
+from typing import Optional, List
 
-import elastic_transport
 import urllib3
 from elasticsearch import Elasticsearch
 from urllib3.exceptions import InsecureRequestWarning
 
-from eswrap.common.EsHandler import EsHandler
+from eswrap.core.es_handler.es_handler import EsHandler
+from eswrap.core.es_index.es_index import EsIndex
+from eswrap.core.index_list.index_list import IndexList
 
 urllib3.disable_warnings(InsecureRequestWarning)
 
@@ -61,6 +62,9 @@ class EsWrap(object):
 
         self.__es_client = Elasticsearch(self.connection_details, **kwargs)
 
+        self.__index_list = IndexList(es_client=self.es_client)
+        self.__indexes = []
+
         if auto_init_index_handlers:
             self.setup_handlers_for_indexes()
 
@@ -74,35 +78,19 @@ class EsWrap(object):
         return self.__version
 
     @property
-    def index_list(self):
-        return list(self.es_client.indices.get(index="*").keys())
+    def index_list(self) -> IndexList:
+        return self.__index_list
+
+    @property
+    def indexes(self) -> List[EsIndex]:
+        return self.index_list.indexes
 
     @property
     def info(self):
         return self.es_client.info()
 
     def setup_handlers_for_indexes(self):
-        try:
-            for each in self.index_list:
-                if not each.startswith("."):
-                    setattr(
-                        self,
-                        each,
-                        EsHandler(es_connection=self.es_client, index=each),
-                    )
-                else:
-                    # workaround for handling system indexes; needs further troubleshooting
-                    setattr(
-                        self,
-                        each[1:].split("-")[0],
-                        EsHandler(es_connection=self.es_client, index=each),
-                    )
-        except elastic_transport.ConnectionError as err:
-            self.logger.warning(
-                f"Cannot connect to elasticsearch, error encountered: {err}"
-            )
-        except Exception as err:
-            self.logger.error(f"Uncaught exception encountered: {err}")
+        self.__index_list.fill_index_list()
 
     def index(self, index_name: str, data: dict, doc_id: Optional[str] = None):
         if not hasattr(self, index_name):

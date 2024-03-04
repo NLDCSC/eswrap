@@ -4,7 +4,6 @@ import subprocess
 
 from .main import EsWrap
 
-
 _PKG_DIR = os.path.dirname(__file__)
 
 
