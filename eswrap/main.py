@@ -27,6 +27,7 @@ class EsWrap(object):
         port: int = 9200,
         scheme: str = "http",
         connection_details: list[str] | list[dict] = None,
+        auto_init_index_handlers: bool = False,
         **kwargs,
     ):
         """
@@ -60,27 +61,8 @@ class EsWrap(object):
 
         self.__es_client = Elasticsearch(self.connection_details, **kwargs)
 
-        try:
-            for each in self.__es_client.indices.get(index="*").keys():
-                if not each.startswith("."):
-                    setattr(
-                        self,
-                        each,
-                        EsHandler(es_connection=self.__es_client, index=each),
-                    )
-                else:
-                    # workaround for handling system indexes; needs further troubleshooting
-                    setattr(
-                        self,
-                        each[1:].split("-")[0],
-                        EsHandler(es_connection=self.__es_client, index=each),
-                    )
-        except elastic_transport.ConnectionError as err:
-            self.logger.warning(
-                f"Cannot connect to elasticsearch, error encountered: {err}"
-            )
-        except Exception as err:
-            self.logger.error(f"Uncaught exception encountered: {err}")
+        if auto_init_index_handlers:
+            self.setup_handlers_for_indexes()
 
     @property
     def es_client(self):
@@ -92,19 +74,42 @@ class EsWrap(object):
         return self.__version
 
     @property
-    def indices(self):
+    def index_list(self):
         return list(self.es_client.indices.get(index="*").keys())
 
     @property
     def info(self):
         return self.es_client.info()
 
+    def setup_handlers_for_indexes(self):
+        try:
+            for each in self.index_list:
+                if not each.startswith("."):
+                    setattr(
+                        self,
+                        each,
+                        EsHandler(es_connection=self.es_client, index=each),
+                    )
+                else:
+                    # workaround for handling system indexes; needs further troubleshooting
+                    setattr(
+                        self,
+                        each[1:].split("-")[0],
+                        EsHandler(es_connection=self.es_client, index=each),
+                    )
+        except elastic_transport.ConnectionError as err:
+            self.logger.warning(
+                f"Cannot connect to elasticsearch, error encountered: {err}"
+            )
+        except Exception as err:
+            self.logger.error(f"Uncaught exception encountered: {err}")
+
     def index(self, index_name: str, data: dict, doc_id: Optional[str] = None):
         if not hasattr(self, index_name):
             setattr(
                 self,
                 index_name,
-                EsHandler(es_connection=self.__es_client, index=index_name),
+                EsHandler(es_connection=self.es_client, index=index_name),
             )
 
         return self.es_client.index(index=index_name, document=data, id=doc_id)
@@ -142,7 +147,7 @@ class EsWrap(object):
                     setattr(
                         self,
                         index_name,
-                        EsHandler(es_connection=self.__es_client, index=index_name),
+                        EsHandler(es_connection=self.es_client, index=index_name),
                     )
                 return True
         except KeyError:
@@ -156,7 +161,7 @@ class EsWrap(object):
         return False
 
     def __del__(self):
-        self.__es_client.close()
+        self.es_client.close()
 
     def __repr__(self):
         """String representation of object"""
