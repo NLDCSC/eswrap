@@ -12,11 +12,11 @@ class EsHandler(object):
         self.es_connection = es_connection
         self.index = index
 
-    def search(self, filter: dict = None, skip: int = 0, limit: int = 10):
+    def search(self):
         """
         Search the index.
         """
-        return EsCursor(self, filter, limit=limit, skip=skip).search()
+        return EsCursor(self)
 
     def find(self, filter: dict = None, **kwargs):
         """
@@ -28,7 +28,7 @@ class EsHandler(object):
         """
         Query the index and return the first result.
         """
-        for result in self.find(filter).limit(1):
+        for result in self.find(filter).set_limit(1):
             return result
         return None
 
@@ -107,19 +107,19 @@ class EsCursor(object):
         filter: dict = None,
         limit: int = 10,
         skip: int = None,
-        sort: tuple = None,
+        sort: list = None,
         **kwargs,
     ):
         """
-        Create a new CveSearchApi object.
+        Create a new EsCursor object.
 
         :param es_handler: EsHandler object
         :type es_handler: EsHandler
         """
 
-        self.EsHandler = es_handler
+        self.__es_handler = es_handler
 
-        self.__data = {}
+        self.__filter_data = {}
 
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -144,7 +144,7 @@ class EsCursor(object):
             else:
                 data = {"query": {"match": filter}}
 
-        self.__data = data
+        self.__filter_data = data
 
         self.__empty = False
 
@@ -154,21 +154,69 @@ class EsCursor(object):
 
         self.data_queue = None
 
+    @property
+    def es_handler(self) -> EsHandler:
+        return self.__es_handler
+
+    @property
+    def filter_data(self) -> dict:
+        return self.__filter_data
+
+    @filter_data.setter
+    def filter_data(self, value: dict) -> None:
+        self.__filter_data = value
+
+    @property
+    def empty(self) -> bool:
+        return self.__empty
+
+    @property
+    def q_limit(self) -> int:
+        return self.__limit
+
+    @q_limit.setter
+    def q_limit(self, limit: int) -> None:
+        self.__limit = limit
+
+    @property
+    def q_skip(self) -> int:
+        return self.__skip
+
+    @q_skip.setter
+    def q_skip(self, skip: int) -> None:
+        self.__skip = skip
+
+    @property
+    def q_sort(self) -> list:
+        return self.__sort
+
+    @q_sort.setter
+    def q_sort(self, sort: list) -> None:
+        self.__sort = sort
+
     def __repr__(self):
         """return a string representation of the obj GenericApi"""
-        return "<<EsCursor: {}>>".format(self.EsHandler.index)
+        return "<<EsCursor: {}>>".format(self.es_handler.index)
 
     def __fetch_results(self):
-        return self.EsHandler.es_connection.search(
-            index=self.EsHandler.index, body=self.__data
+        return self.es_handler.es_connection.search(
+            index=self.es_handler.index, body=self.filter_data
         )
+
+    def filter(self, *args, **kwargs):
+        pass
+
+    def match_all(self):
+        self.filter_data = {"query": {"match_all": {}}}
+
+        return self
 
     def search(self):
 
-        ret_dict = {"skip": self.__skip, "limit": self.__limit}
+        ret_dict = {"skip": self.q_skip, "limit": self.q_limit}
 
-        self.__data["size"] = self.__limit
-        self.__data["from"] = self.__skip
+        self.filter_data["size"] = self.q_limit
+        self.filter_data["from"] = self.q_skip
 
         results = self.__fetch_results()
 
@@ -194,9 +242,9 @@ class EsCursor(object):
 
         return ret_dict
 
-    def query(self):
+    def execute(self):
         """
-        Endpoint for free query
+        Fetch results from Elasticsearch
         """
 
         results = self.__fetch_results()
@@ -217,62 +265,47 @@ class EsCursor(object):
         except Exception:
             self.data_queue = results
 
-    def limit(self, value: int):
+    def set_limit(self, value: int):
         """
         Method to limit the amount of returned data; default is set to 10
-
-        :param value: Limit
-        :type value: int
-        :return: EsCursor object
-        :rtype: EsCursor
         """
 
         if not isinstance(value, int):
             raise TypeError("limit must be an integer")
 
-        self.__limit = value
+        self.q_limit = value
 
-        self.__data["size"] = self.__limit
+        self.filter_data["size"] = self.q_limit
 
         return self
 
-    def skip(self, value: int):
+    def set_skip(self, value: int):
         """
         Method to skip the given amount of records before returning the data
-
-        :param value: Skip
-        :type value: int
-        :return: EsCursor object
-        :rtype: EsCursor
         """
 
         if not isinstance(value, int):
             raise TypeError("skip must be an integer")
 
-        self.__skip = value
+        self.q_skip = value
 
-        self.__data["from"] = self.__skip
+        self.filter_data["from"] = self.q_skip
 
         return self
 
-    def sort(self, values: list):
+    def set_sort(self, values: list):
         """
         A comma-separated list of <field>:<direction> pairs
-
-        :param values: A comma-separated list of <field>:<direction> pairs
-        :type values: list
-        :return: EsCursor object
-        :rtype: EsCursor
         """
-        self.__sort = values
+        self.q_sort = values
 
-        self.__data["sort"] = values
+        self.filter_data["sort"] = values
 
         return self
 
     def __iter__(self):
         """Make this class an iterator"""
-        self.query()
+        self.execute()
         return self
 
     def next(self):
