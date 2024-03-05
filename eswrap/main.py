@@ -1,3 +1,4 @@
+import collections
 import logging
 import os
 from typing import Optional, List
@@ -9,6 +10,7 @@ from urllib3.exceptions import InsecureRequestWarning
 from eswrap.core.es_handler.es_handler import EsHandler
 from eswrap.core.es_index.es_index import EsIndex
 from eswrap.core.index_list.index_list import IndexList
+from eswrap.errors.indexes import IndexNotFoundError
 
 urllib3.disable_warnings(InsecureRequestWarning)
 
@@ -63,6 +65,7 @@ class EsWrap(object):
         self.__es_client = Elasticsearch(self.connection_details, **kwargs)
 
         self.__index_list = IndexList(es_client=self.es_client)
+        self.__index_dict = {}
         self.__indexes = []
 
         if auto_init_index_handlers:
@@ -82,6 +85,14 @@ class EsWrap(object):
         return self.__index_list
 
     @property
+    def index_dict(self) -> dict:
+        return self.__index_dict
+
+    @index_dict.setter
+    def index_dict(self, val: dict) -> None:
+        self.__index_dict = val
+
+    @property
     def indexes(self) -> List[EsIndex]:
         return self.index_list.indexes
 
@@ -89,18 +100,36 @@ class EsWrap(object):
     def info(self):
         return self.es_client.info()
 
+    def get_index_handler(self, index_name: str) -> EsHandler:
+        if len(self.indexes) == 0:
+            self.setup_handlers_for_indexes()
+
+        try:
+            index_handler = [
+                x for x in self.index_list.indexes if x.name == index_name
+            ][0]()
+            return index_handler
+        except IndexError:
+            raise IndexNotFoundError
+
     def setup_handlers_for_indexes(self):
-        self.__index_list.fill_index_list()
+        self.index_list.fill_index_list()
+
+        index_coldict = collections.defaultdict()
+
+        for index in self.indexes:
+            index_coldict[index.name] = index
+
+        self.index_dict = dict(index_coldict)
 
     def index(self, index_name: str, data: dict, doc_id: Optional[str] = None):
-        if not hasattr(self, index_name):
-            setattr(
-                self,
-                index_name,
-                EsHandler(es_connection=self.es_client, index=index_name),
-            )
 
-        return self.es_client.index(index=index_name, document=data, id=doc_id)
+        ret_data = self.es_client.index(index=index_name, document=data, id=doc_id)
+
+        if index_name not in self.index_dict.keys():
+            self.setup_handlers_for_indexes()
+
+        return ret_data
 
     def delete_index(self, index_name: str):
 
@@ -110,8 +139,7 @@ class EsWrap(object):
 
         try:
             if ret_val["acknowledged"]:
-                if hasattr(self, index_name):
-                    delattr(self, index_name)
+                self.setup_handlers_for_indexes()
                 return True
         except KeyError:
             # failed somehow, assuming the given index does not exist
@@ -131,12 +159,7 @@ class EsWrap(object):
 
         try:
             if ret_val["acknowledged"]:
-                if not hasattr(self, index_name):
-                    setattr(
-                        self,
-                        index_name,
-                        EsHandler(es_connection=self.es_client, index=index_name),
-                    )
+                self.setup_handlers_for_indexes()
                 return True
         except KeyError:
             # failed somehow, assuming the given index does not exist
