@@ -121,6 +121,9 @@ class EsCursor(object):
 
         self.__filter_data = {}
 
+        self.tier1_query = False
+        self.tierx_query = False
+
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -203,7 +206,20 @@ class EsCursor(object):
             index=self.es_handler.index, body=self.filter_data
         )
 
-    def filter(self, *args, **kwargs):
+    def __set_query_tier_level(self):
+        if not self.tier1_query:
+            self.tier1_query = True
+            return False
+
+        if not self.tierx_query:
+            self.tierx_query = True
+
+        return True
+
+    def filter(self, term_level_type: str = None, **kwargs):
+        pass
+
+    def query(self, qeury_type: str = None, **kwargs):
         pass
 
     def match_all(self):
