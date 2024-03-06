@@ -1,6 +1,9 @@
+import collections
 from typing import Optional
 
 from elasticsearch import Elasticsearch
+
+from eswrap.errors.queries import QueryTypeNotSupportedError
 
 
 class EsHandler(object):
@@ -217,13 +220,123 @@ class EsCursor(object):
         return True
 
     def filter(self, term_level_type: str = None, **kwargs):
+        """
+        exists query
+            Returns documents that contain any indexed value for a field.
+        fuzzy query
+            Returns documents that contain terms similar to the search term. Elasticsearch measures similarity, or fuzziness, using a Levenshtein edit distance.
+        ids query
+            Returns documents based on their document IDs.
+        prefix query
+            Returns documents that contain a specific prefix in a provided field.
+        range query
+            Returns documents that contain terms within a provided range.
+        regexp query
+            Returns documents that contain terms matching a regular expression.
+        term query
+            Returns documents that contain an exact term in a provided field.
+        terms query
+            Returns documents that contain one or more exact terms in a provided field.
+        terms_set query
+            Returns documents that contain a minimum number of exact terms in a provided field. You can define the minimum number of matching terms using a field or script.
+        wildcard query
+            Returns documents that contain terms matching a wildcard pattern.
+        """
         pass
 
-    def query(self, qeury_type: str = None, **kwargs):
-        pass
+    def query(self, query_type: str = None, **kwargs):
+        """
+        intervals query
+            A full text query that allows fine-grained control of the ordering and proximity of matching terms.
+        match query
+            The standard query for performing full text queries, including fuzzy matching and phrase or proximity queries.
+        match_bool_prefix query
+            Creates a bool query that matches each term as a term query, except for the last term, which is matched as a prefix query
+        match_phrase query
+            Like the match query but used for matching exact phrases or word proximity matches.
+        match_phrase_prefix query
+            Like the match_phrase query, but does a wildcard search on the final word.
+        multi_match query
+            The multi-field version of the match query.
+        combined_fields query
+            Matches over multiple fields as if they had been indexed into one combined field.
+        query_string query
+            Supports the compact Lucene query string syntax, allowing you to specify AND|OR|NOT conditions and multi-field search within a single query string. For expert users only.
+        simple_query_string query
+            A simpler, more robust version of the query_string syntax suitable for exposing directly to users.
+        """
+
+        supported_query_types = ["match", "match_phrase", "match_phrase_prefix"]
+
+        if query_type not in supported_query_types:
+            raise QueryTypeNotSupportedError
+
+        query_list = []
+
+        query_operand = "must"
+
+        for k, v in kwargs.items():
+            query_data = collections.defaultdict(dict)
+            if not isinstance(v, list):
+                query_data[k] = v
+                query_list.append({query_type: dict(query_data)})
+            else:
+                query_operand = "should"
+                for each in v:
+                    query_data[k] = each
+                    query_list.append({query_type: dict(query_data)})
+
+        self.filter_data = {"query": {"bool": {query_operand: query_list}}}
+
+        return self
+
+    def exclude(self, query_type: str = None, **kwargs):
+        """
+        intervals query
+            A full text query that allows fine-grained control of the ordering and proximity of matching terms.
+        match query
+            The standard query for performing full text queries, including fuzzy matching and phrase or proximity queries.
+        match_bool_prefix query
+            Creates a bool query that matches each term as a term query, except for the last term, which is matched as a prefix query
+        match_phrase query
+            Like the match query but used for matching exact phrases or word proximity matches.
+        match_phrase_prefix query
+            Like the match_phrase query, but does a wildcard search on the final word.
+        multi_match query
+            The multi-field version of the match query.
+        combined_fields query
+            Matches over multiple fields as if they had been indexed into one combined field.
+        query_string query
+            Supports the compact Lucene query string syntax, allowing you to specify AND|OR|NOT conditions and multi-field search within a single query string. For expert users only.
+        simple_query_string query
+            A simpler, more robust version of the query_string syntax suitable for exposing directly to users.
+        """
+
+        supported_query_types = ["match", "match_phrase", "match_phrase_prefix"]
+
+        if query_type not in supported_query_types:
+            raise QueryTypeNotSupportedError
+
+        query_list = []
+
+        query_operand = "must_not"
+
+        for k, v in kwargs.items():
+            query_data = collections.defaultdict(dict)
+            if not isinstance(v, list):
+                query_data[k] = v
+                query_list.append({query_type: dict(query_data)})
+            else:
+                for each in v:
+                    query_data[k] = each
+                    query_list.append({query_type: dict(query_data)})
+
+        self.filter_data = {"query": {"bool": {query_operand: query_list}}}
+
+        return self
 
     def match_all(self):
-        self.filter_data = {"query": {"match_all": {}}}
+        self.filter_data = {"query": {"bool": {"must": {"match_all": {}}}}}
 
         return self
 

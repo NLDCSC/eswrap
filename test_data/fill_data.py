@@ -5,7 +5,7 @@ import requests
 
 from eswrap import EsWrap
 
-es = EsWrap(connection_details=["http://localhost:9200"])
+es = EsWrap(connection_details=["http://elastic:password@127.0.0.1:9200"])
 i = 1
 while i < 30:
     r = requests.get("https://swapi.dev/api/people/" + str(i))
