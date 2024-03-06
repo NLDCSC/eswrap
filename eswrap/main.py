@@ -131,6 +131,10 @@ class EsWrap(object):
 
         return ret_data
 
+    def search(self, index_name: str):
+
+        return self.get_index_handler(index_name).search()
+
     def delete_index(self, index_name: str):
 
         ret_val = self.es_client.options(ignore_status=[400, 404]).indices.delete(

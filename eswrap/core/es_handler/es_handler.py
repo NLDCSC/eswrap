@@ -21,39 +21,27 @@ class EsHandler(object):
         """
         return EsCursor(self)
 
-    def find(self, filter: dict = None, **kwargs):
+    def count(self, filter_data: dict = None, **kwargs):
         """
-        Query the index.
+        Count the number of records in the query
         """
-        return EsCursor(self, filter, **kwargs)
-
-    def find_one(self, filter: dict = None):
-        """
-        Query the index and return the first result.
-        """
-        for result in self.find(filter).set_limit(1):
-            return result
-        return None
-
-    def count(self, filter: dict = None, **kwargs):
-        """ """
-        if filter is None:
+        if filter_data is None:
             data = {"query": {"match_all": {}}}
         else:
             if "regexp" in kwargs:
                 if kwargs["regexp"]:
                     if "bool_query" in kwargs and kwargs["bool_query"]:
-                        data = {"query": {"bool": filter}}
+                        data = {"query": {"bool": filter_data}}
                         # popping this value; elasticsearch does not recognize this value
                         kwargs.pop("bool_query")
                     else:
-                        data = {"query": {"regexp": filter}}
+                        data = {"query": {"regexp": filter_data}}
                     # popping this value; elasticsearch does not recognize this value
                     kwargs.pop("regexp")
                 else:
-                    data = {"query": {"match": filter}}
+                    data = {"query": {"match": filter_data}}
             else:
-                data = {"query": {"match": filter}}
+                data = {"query": {"match": filter_data}}
 
         return self.es_connection.count(index=self.index, body=data, **kwargs)["count"]
 
@@ -71,14 +59,62 @@ class EsHandler(object):
     def delete(self, doc_id: str, **kwargs):
         return self.es_connection.delete(index=self.index, id=doc_id, **kwargs)
 
-    def delete_by_query(self, filter: dict, **kwargs):
+    def delete_by_query(self, filter_data: dict, **kwargs):
         return self.es_connection.delete_by_query(
-            index=self.index, body=filter, **kwargs
+            index=self.index, body=filter_data, **kwargs
         )
 
     def __repr__(self):
         """return a string representation of the obj EsHandler"""
         return "<< EsHandler: {} >>".format(self.index)
+
+
+"""
+intervals query
+    A full text query that allows fine-grained control of the ordering and proximity of matching terms.
+match query
+    The standard query for performing full text queries, including fuzzy matching and phrase or
+    proximity queries.
+match_bool_prefix query
+    Creates a bool query that matches each term as a term query, except for the last term, which is
+    matched as a prefix query
+match_phrase query
+    Like the match query but used for matching exact phrases or word proximity matches.
+match_phrase_prefix query
+    Like the match_phrase query, but does a wildcard search on the final word.
+multi_match query
+    The multi-field version of the match query.
+combined_fields query
+    Matches over multiple fields as if they had been indexed into one combined field.
+query_string query
+    Supports the compact Lucene query string syntax, allowing you to specify AND|OR|NOT conditions and
+    multi-field search within a single query string. For expert users only.
+simple_query_string query
+    A simpler, more robust version of the query_string syntax suitable for exposing directly to users.
+
+exists query
+    Returns documents that contain any indexed value for a field.
+fuzzy query
+    Returns documents that contain terms similar to the search term. Elasticsearch measures similarity,
+    or fuzziness, using a Levenshtein edit distance.
+ids query
+    Returns documents based on their document IDs.
+prefix query
+    Returns documents that contain a specific prefix in a provided field.
+range query
+    Returns documents that contain terms within a provided range.
+regexp query
+    Returns documents that contain terms matching a regular expression.
+term query
+    Returns documents that contain an exact term in a provided field.
+terms query
+    Returns documents that contain one or more exact terms in a provided field.
+terms_set query
+    Returns documents that contain a minimum number of exact terms in a provided field. You can define
+    the minimum number of matching terms using a field or script.
+wildcard query
+    Returns documents that contain terms matching a wildcard pattern.
+"""
 
 
 class EsCursor(object):
@@ -89,7 +125,6 @@ class EsCursor(object):
     def __init__(
         self,
         es_handler: EsHandler,
-        filter: dict = None,
         limit: int = 10,
         skip: int = None,
         sort: list = None,
@@ -111,7 +146,7 @@ class EsCursor(object):
         self.tier1_query = False
         self.tierx_query = False
 
-        self.supported_bool_query_types = [
+        self.supported_bool_filter_types = [
             "match",
             "match_phrase",
             "match_phrase_prefix",
@@ -121,31 +156,29 @@ class EsCursor(object):
             "term",
             "terms",
             "range",
+            "regexp",
             "wildcard",
         ]
 
+        self.supported_bool_query_types = [
+            "match",
+            "match_phrase",
+            "match_phrase_prefix",
+            "exists",
+            "fuzzy",
+            "ids",
+            "prefix",
+            "term",
+            "terms",
+            "range",
+            "regexp",
+            "wildcard",
+        ]
+
+        self.supported_bool_exclude_types = self.supported_bool_query_types
+
         for k, v in kwargs.items():
             setattr(self, k, v)
-
-        if filter is not None:
-            data = filter
-            if hasattr(self, "regexp"):
-                if self.regexp:
-                    if hasattr(self, "bool_query") and self.bool_query:
-                        data = {"query": {"bool": filter}}
-                    else:
-                        data = {"query": {"regexp": filter}}
-                else:
-                    data = {"query": {"match": filter}}
-            elif hasattr(self, "query_on_field"):
-                if hasattr(self, "bool_query") and self.bool_query:
-                    data = {"query": {"bool": filter}}
-                if hasattr(self, "exists_query") and self.exists_query:
-                    data = {"query": {"exists": filter}}
-            else:
-                data = {"query": {"match": filter}}
-
-            self.__filter_data = data
 
         self.__empty = False
 
@@ -224,53 +257,8 @@ class EsCursor(object):
         Filter context is in effect whenever a query clause is passed to a filter parameter, such as the filter or
         must_not parameters in the bool query, the filter parameter in the constant_score query, or the filter
         aggregation.
-
-                intervals query
-                    A full text query that allows fine-grained control of the ordering and proximity of matching terms.
-                match query
-                    The standard query for performing full text queries, including fuzzy matching and phrase or
-                    proximity queries.
-                match_bool_prefix query
-                    Creates a bool query that matches each term as a term query, except for the last term, which is
-                    matched as a prefix query
-                match_phrase query
-                    Like the match query but used for matching exact phrases or word proximity matches.
-                match_phrase_prefix query
-                    Like the match_phrase query, but does a wildcard search on the final word.
-                multi_match query
-                    The multi-field version of the match query.
-                combined_fields query
-                    Matches over multiple fields as if they had been indexed into one combined field.
-                query_string query
-                    Supports the compact Lucene query string syntax, allowing you to specify AND|OR|NOT conditions and
-                    multi-field search within a single query string. For expert users only.
-                simple_query_string query
-                    A simpler, more robust version of the query_string syntax suitable for exposing directly to users.
-
-                exists query
-                    Returns documents that contain any indexed value for a field.
-                fuzzy query
-                    Returns documents that contain terms similar to the search term. Elasticsearch measures similarity,
-                    or fuzziness, using a Levenshtein edit distance.
-                ids query
-                    Returns documents based on their document IDs.
-                prefix query
-                    Returns documents that contain a specific prefix in a provided field.
-                range query
-                    Returns documents that contain terms within a provided range.
-                regexp query
-                    Returns documents that contain terms matching a regular expression.
-                term query
-                    Returns documents that contain an exact term in a provided field.
-                terms query
-                    Returns documents that contain one or more exact terms in a provided field.
-                terms_set query
-                    Returns documents that contain a minimum number of exact terms in a provided field. You can define
-                    the minimum number of matching terms using a field or script.
-                wildcard query
-                    Returns documents that contain terms matching a wildcard pattern.
         """
-        if query_type not in self.supported_bool_query_types:
+        if query_type not in self.supported_bool_filter_types:
             raise QueryTypeNotSupportedError
 
         query_list = []
@@ -299,51 +287,6 @@ class EsCursor(object):
 
         Query context is in effect whenever a query clause is passed to a query parameter, such as the query parameter
         in the search API.
-
-                intervals query
-                    A full text query that allows fine-grained control of the ordering and proximity of matching terms.
-                match query
-                    The standard query for performing full text queries, including fuzzy matching and phrase or
-                    proximity queries.
-                match_bool_prefix query
-                    Creates a bool query that matches each term as a term query, except for the last term, which is
-                    matched as a prefix query
-                match_phrase query
-                    Like the match query but used for matching exact phrases or word proximity matches.
-                match_phrase_prefix query
-                    Like the match_phrase query, but does a wildcard search on the final word.
-                multi_match query
-                    The multi-field version of the match query.
-                combined_fields query
-                    Matches over multiple fields as if they had been indexed into one combined field.
-                query_string query
-                    Supports the compact Lucene query string syntax, allowing you to specify AND|OR|NOT conditions and
-                    multi-field search within a single query string. For expert users only.
-                simple_query_string query
-                    A simpler, more robust version of the query_string syntax suitable for exposing directly to users.
-
-                exists query
-                    Returns documents that contain any indexed value for a field.
-                fuzzy query
-                    Returns documents that contain terms similar to the search term. Elasticsearch measures similarity,
-                    or fuzziness, using a Levenshtein edit distance.
-                ids query
-                    Returns documents based on their document IDs.
-                prefix query
-                    Returns documents that contain a specific prefix in a provided field.
-                range query
-                    Returns documents that contain terms within a provided range.
-                regexp query
-                    Returns documents that contain terms matching a regular expression.
-                term query
-                    Returns documents that contain an exact term in a provided field.
-                terms query
-                    Returns documents that contain one or more exact terms in a provided field.
-                terms_set query
-                    Returns documents that contain a minimum number of exact terms in a provided field. You can define
-                    the minimum number of matching terms using a field or script.
-                wildcard query
-                    Returns documents that contain terms matching a wildcard pattern.
         """
 
         if query_type not in self.supported_bool_query_types:
@@ -376,54 +319,9 @@ class EsCursor(object):
 
         Query context is in effect whenever a query clause is passed to a query parameter, such as the query parameter
         in the search API.
-
-                intervals query
-                    A full text query that allows fine-grained control of the ordering and proximity of matching terms.
-                match query
-                    The standard query for performing full text queries, including fuzzy matching and phrase or
-                    proximity queries.
-                match_bool_prefix query
-                    Creates a bool query that matches each term as a term query, except for the last term, which is
-                    matched as a prefix query
-                match_phrase query
-                    Like the match query but used for matching exact phrases or word proximity matches.
-                match_phrase_prefix query
-                    Like the match_phrase query, but does a wildcard search on the final word.
-                multi_match query
-                    The multi-field version of the match query.
-                combined_fields query
-                    Matches over multiple fields as if they had been indexed into one combined field.
-                query_string query
-                    Supports the compact Lucene query string syntax, allowing you to specify AND|OR|NOT conditions and
-                    multi-field search within a single query string. For expert users only.
-                simple_query_string query
-                    A simpler, more robust version of the query_string syntax suitable for exposing directly to users.
-
-                exists query
-                    Returns documents that contain any indexed value for a field.
-                fuzzy query
-                    Returns documents that contain terms similar to the search term. Elasticsearch measures similarity,
-                    or fuzziness, using a Levenshtein edit distance.
-                ids query
-                    Returns documents based on their document IDs.
-                prefix query
-                    Returns documents that contain a specific prefix in a provided field.
-                range query
-                    Returns documents that contain terms within a provided range.
-                regexp query
-                    Returns documents that contain terms matching a regular expression.
-                term query
-                    Returns documents that contain an exact term in a provided field.
-                terms query
-                    Returns documents that contain one or more exact terms in a provided field.
-                terms_set query
-                    Returns documents that contain a minimum number of exact terms in a provided field. You can define
-                    the minimum number of matching terms using a field or script.
-                wildcard query
-                    Returns documents that contain terms matching a wildcard pattern.
         """
 
-        if query_type not in self.supported_bool_query_types:
+        if query_type not in self.supported_bool_exclude_types:
             raise QueryTypeNotSupportedError
 
         query_list = []
