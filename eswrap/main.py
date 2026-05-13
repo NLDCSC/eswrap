@@ -72,11 +72,11 @@ class EsWrap(object):
             self.setup_handlers_for_indexes()
 
     @property
-    def es_client(self):
+    def es_client(self) -> Elasticsearch:
         return self.__es_client
 
     @property
-    def version(self):
+    def version(self) -> str:
         """Property returning current version"""
         return self.__version
 

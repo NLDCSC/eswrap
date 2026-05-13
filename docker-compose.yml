@@ -1,4 +1,6 @@
-version: '3.5'
+---
+name: 'Elasticsearch'
+
 services:
   es01:
     image: elasticsearch:8.7.0
