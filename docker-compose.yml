@@ -3,7 +3,7 @@ name: 'Elasticsearch'
 
 services:
   es01:
-    image: elasticsearch:9.5.3
+    image: elasticsearch:9.5.5
     container_name: es01
     environment:
       - discovery.type=single-node
@@ -25,7 +25,7 @@ services:
       - elastic
 
   kibana:
-    image: kibana:9.5.3
+    image: kibana:9.5.5
     container_name: kibana
     ports:
       - "5601:5601"
